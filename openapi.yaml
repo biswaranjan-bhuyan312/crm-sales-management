@@ -1,0 +1,737 @@
+openapi: 3.0.3
+info:
+  title: CRM Sales Management API
+  version: 1.0.0
+  description: |
+    REST API for CRM users, leads, customers, deals, activities, timelines, and analytics.
+    Protected endpoints require a JWT bearer token. This specification documents the routes
+    currently mounted in src/app.js. Confirm controller-specific request fields and response
+    shapes against the implementation before treating this as a final contract.
+servers:
+  - url: http://localhost:5000
+    description: Local development
+tags:
+  - name: Root
+  - name: Authentication
+  - name: Users
+  - name: Leads
+  - name: Customers
+  - name: Deals
+  - name: Activities
+  - name: Timeline
+  - name: Analytics
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: Invalid or expired token
+    GenericSuccess:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Request completed successfully
+    RegisterRequest:
+      type: object
+      required: [name, email, phone, password, role]
+      properties:
+        name:
+          type: string
+          example: Demo Admin
+        email:
+          type: string
+          format: email
+          example: admin@example.com
+        phone:
+          type: string
+          example: "9876543210"
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: ChangeThis123!
+        role:
+          type: string
+          enum: [Admin, Sales Manager, Sales Executive]
+          example: Sales Executive
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: admin@example.com
+        password:
+          type: string
+          format: password
+          example: ChangeThis123!
+    LeadRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Priya Sharma
+        email:
+          type: string
+          format: email
+          nullable: true
+          example: priya@example.com
+        phone:
+          type: string
+          example: "9876543210"
+        company:
+          type: string
+          example: Example Pvt Ltd
+        source:
+          type: string
+          enum: [Website, Referral, Social Media, Email, Phone, Other]
+        priority:
+          type: string
+          enum: [Low, Medium, High]
+        description:
+          type: string
+  parameters:
+    IdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: MongoDB document ID
+  responses:
+    Unauthorized:
+      description: Missing, invalid, expired, or blacklisted token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Authenticated user does not have permission
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Requested resource was not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+paths:
+  /:
+    get:
+      tags: [Health]
+      summary: Check API status
+      responses:
+        '200':
+          description: API is running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: CRM sales management API is running
+  /api/auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register a user
+      description: Registration accepts one of the three supported roles. Restrict public role assignment before public deployment.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Registration successful
+        '400':
+          description: Invalid role or schema validation error
+        '409':
+          description: Email or phone already exists
+  /api/auth/login:
+    post:
+      tags: [Authentication]
+      summary: Log in
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful; response includes JWT and user details
+        '401':
+          description: Invalid credentials
+        '403':
+          description: User account is inactive
+  /api/auth/me:
+    get:
+      tags: [Authentication]
+      summary: Get current authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user details
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Log out and blacklist the current token
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logout successful
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/users/create-user:
+    post:
+      tags: [Users]
+      summary: Create a user (Admin only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User created
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/users:
+    get:
+      tags: [Users]
+      summary: List users (Admin only)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User list
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/users/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    get:
+      tags: [Users]
+      summary: Get a user by ID (Admin only)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User details
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Users]
+      summary: Update user details (Admin only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: User updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags: [Users]
+      summary: Delete a user (Admin only)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/users/{id}/status:
+    patch:
+      tags: [Users]
+      summary: Update user status (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: User status updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/leads:
+    get:
+      tags: [Leads]
+      summary: List leads
+      description: Allowed roles are Admin, Sales Manager, and Sales Executive.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lead list
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/leads/create-lead:
+    post:
+      tags: [Leads]
+      summary: Create a lead
+      description: Admin and Sales Manager only.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LeadRequest'
+      responses:
+        '201':
+          description: Lead created
+        '400':
+          description: Validation error
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/leads/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    get:
+      tags: [Leads]
+      summary: Get a lead by ID
+      description: Admin and Sales Manager only.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lead details
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Leads]
+      summary: Update a lead
+      description: Admin and Sales Manager only.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LeadRequest'
+      responses:
+        '200':
+          description: Lead updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Leads]
+      summary: Delete a lead
+      description: Admin and Sales Manager only.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lead deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/leads/{id}/status:
+    patch:
+      tags: [Leads]
+      summary: Update lead status
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [New, Contacted, Qualified, Unqualified, Converted, Lost]
+      responses:
+        '200':
+          description: Lead status updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/leads/{id}/assign:
+    patch:
+      tags: [Leads]
+      summary: Assign a lead
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                assignedTo:
+                  type: string
+                  description: User ID
+      responses:
+        '200':
+          description: Lead assigned
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/leads/{id}/timeline:
+    get:
+      tags: [Leads]
+      summary: Get a lead timeline
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Lead timeline
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/leads/{id}/convert:
+    post:
+      tags: [Leads]
+      summary: Convert a lead to a customer
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '201':
+          description: Lead converted
+        '400':
+          description: Conversion is not allowed
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/customers:
+    get:
+      tags: [Customers]
+      summary: List customers
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Customer list
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/customers/create-customer:
+    post:
+      tags: [Customers]
+      summary: Create a customer
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '201':
+          description: Customer created
+        '400':
+          description: Validation error
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/customers/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    get:
+      tags: [Customers]
+      summary: Get a customer
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Customer details
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Customers]
+      summary: Update a customer
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Customer updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      tags: [Customers]
+      summary: Delete a customer
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Customer deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/deals:
+    get:
+      tags: [Deals]
+      summary: List deals
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Deal list
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/deals/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    get:
+      tags: [Deals]
+      summary: Get a deal
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Deal details
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Deals]
+      summary: Update a deal
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Deal updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/activities:
+    get:
+      tags: [Activities]
+      summary: List activities
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Activity list
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Activities]
+      summary: Create an activity
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, title, assignedTo, dueDate, relatedEntityType, relatedEntityId, createdBy]
+              properties:
+                type:
+                  type: string
+                  enum: [Call, Email, Meeting, Demo, Follow-up, Reminder, Note]
+                title:
+                  type: string
+                description:
+                  type: string
+                assignedTo:
+                  type: string
+                dueDate:
+                  type: string
+                  format: date-time
+                relatedEntityType:
+                  type: string
+                  enum: [Lead, Customer, Deal, User]
+                relatedEntityId:
+                  type: string
+                createdBy:
+                  type: string
+      responses:
+        '201':
+          description: Activity created
+        '400':
+          description: Validation error
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/activities/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    get:
+      tags: [Activities]
+      summary: Get an activity
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Activity details
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Activities]
+      summary: Update an activity
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Activity updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      tags: [Activities]
+      summary: Delete an activity
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Activity deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/activities/{id}/complete:
+    patch:
+      tags: [Activities]
+      summary: Mark an activity as completed
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Activity completed
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/timeline/{entityType}/{entityId}:
+    get:
+      tags: [Timeline]
+      summary: Get timeline events for an entity
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: entityType
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [Lead, Customer, Deal]
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Timeline events
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/analytics:
+    get:
+      tags: [Analytics]
+      summary: Retrieve sales analytics
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Analytics result
+        '401':
+          $ref: '#/components/responses/Unauthorized'
